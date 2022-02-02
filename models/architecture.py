@@ -13,6 +13,7 @@ from models.metric import Metric
 from modules.embedding import Embedding
 from modules.layer import *
 
+
 class MainArchitecture(nn.Module):
     def __init__(self, vocab, config, embedd_word=None, embedd_tag=None, embedd_etype=None):
         super(MainArchitecture, self).__init__()
@@ -139,7 +140,11 @@ class MainArchitecture(nn.Module):
                     self.metric_span.correct_label_count += 1
                 if nuclear_relation_idx[idx, idy].item() == gold_nuclear_relation[idx, idy].item():
                     self.metric_nuclear_relation.correct_label_count += 1
-        
+
+    def predict(self, test_instance):
+        _, predicted = torch.max(test_instance, 1)
+        return predicted
+
     def get_prediction(self, all_nuclear_relation_output):
         batch_size, _, _ = all_nuclear_relation_output.shape
         _, nuclear_relation_idx = torch.max(all_nuclear_relation_output, 2)
@@ -327,7 +332,6 @@ class MainArchitecture(nn.Module):
         span_initial = self.get_initial_span(span, batch_size) #act as queue
         for idx in range(batch_size):
             self.index_output[idx]=[]
-
         self.all_span_output = copy.deepcopy(span_initial)
         all_segment_output = []
         all_segment_mask = []
@@ -590,11 +594,20 @@ class MainArchitecture(nn.Module):
                                      all_nuclear_relation_output, all_nuclear_relation_gold, \
                                      len_golds, depth)
     # End of training with DYNAMIC oracle ---------------------------------------------------
-
-    
     # Primary function
+
+    def forward(self, subset_data):
+        words, tags, etypes, edu_mask, word_mask, len_edus, word_denominator, syntax, \
+        gold_nuclear, gold_relation, gold_nuclear_relation, gold_segmentation, span, len_golds, depth = subset_data
+        encoder_output = self.forward_all(words, tags, etypes, edu_mask, word_mask, word_denominator, syntax)
+        # span = [[(0, 68), (1, 68), (1, 2), (3, 68), (3, 65), (66, 68), (3, 58), (59, 65), (66, 67), (3, 52), (53, 58), (59, 62), (63, 65), (3, 48), (49, 52), (53, 55), (56, 58), (59, 60), (61, 62), (64, 65), (3, 44), (45, 48), (49, 51), (53, 54), (57, 58), (3, 39), (40, 44), (45, 46), (47, 48), (50, 51), (3, 37), (38, 39), (40, 42), (43, 44), (3, 33), (34, 37), (40, 41), (3, 26), (27, 33), (34, 35), (36, 37), (3, 22), (23, 26), (27, 31), (32, 33), (3, 19), (20, 22), (23, 25), (27, 28), (29, 31), (3, 16), (17, 19), (20, 21), (24, 25), (29, 30), (3, 13), (14, 16), (17, 18), (3, 5), (6, 13), (14, 15), (3, 4), (6, 9), (10, 13), (6, 7), (8, 9), (11, 13), (11, 12)]]
+        # span = [[(0, 9), (10, 19), (20, 22)]]
+        span = [[(0, len_edus[0] - 1)]]
+        gs, results = self.decode_testing(encoder_output, span)
+        return gs, results
+
     def loss(self, subset_data, gold_subtrees, epoch=0):
-        # subset_data = edu_words, edu_tags, edu_types, edu_mask, word_mask, len_edus, word_denominator, edu_syntax,
+        # subset_data = edu_words, edux_tags, edu_types, edu_mask, word_mask, len_edus, word_denominator, edu_syntax,
         # gold_nuclear, gold_relation, gold_segmentation, span, len_golds, depth
         self.epoch = epoch
         words, tags, etypes, edu_mask, word_mask, len_edus, word_denominator, syntax, \

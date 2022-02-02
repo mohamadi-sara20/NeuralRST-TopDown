@@ -173,6 +173,7 @@ class Reader(object):
         for i in range(int(len(subline)/2)):
             word_tag_pairs = subline[i].split(' ')
             end_index = start_index + len(word_tag_pairs) - 1
+
             for word_tag_pair in word_tag_pairs:
                 if word_tag_pair == '<P>' or word_tag_pair == '<S>':
                     break
@@ -185,6 +186,7 @@ class Reader(object):
                 tags.append(tag)
                 total_words.append(word)
                 total_tags.append(tag)
+
             total_words.append(word_tag_pairs[-1])
             total_tags.append(NULLKEY)
             sent_types.append((start_index, end_index, word_tag_pair))
@@ -203,25 +205,39 @@ class Reader(object):
         
         sum = 0
         # Check edu
+        if edus[-1].end_index == len(total_words) - 1:
+            use_total_words = True
+            use_words = False
+        elif edus[-1].end_index == len(words) - 1:
+            use_total_words = False
+            use_words = True
+        else:
+            raise Exception(f"Invalid word counts: last edu ends with index {edus[-1].end_index} - total words {len(total_words)} - words {len(words)}")
+
         for i in range(edu_size):
             assert(edus[i].start_index <= edus[i].end_index)
             assert(edus[i].start_index >= 0 and edus[i].end_index < total_word_size)
             if (i < edu_size - 1):
                 assert(edus[i].end_index + 1 == edus[i+1].start_index)
             for j in range(edus[i].start_index, edus[i].end_index + 1):
-                if total_tags[j] != NULLKEY:
-                    edus[i].words.append(total_words[j].lower())
-                    edus[i].tags.append(total_tags[j])
+                if use_total_words:
+                    if total_tags[j] != NULLKEY:
+                        edus[i].words.append(total_words[j].lower())
+                        edus[i].tags.append(total_tags[j])
+                    else:
+                        sum+=1
                 else:
-                    sum+=1
+                    edus[i].words.append(words[j].lower())
+                    edus[i].tags.append(tags[j])
+
             assert(len(edus[i].words) == len(edus[i].tags))
             sum += len(edus[i].words)
         
         #Check subtree
-        assert(sum == len(total_words) and len(result.subtrees) + 2 == len(edus) * 2)
-        subtree_size = len(result.subtrees)
-        for i in range(subtree_size):
-            assert(result.subtrees[i].relation != NULLKEY and result.subtrees[i].nuclear != NULLKEY)
+        # assert(sum == len(total_words) and len(result.subtrees) + 2 == len(edus) * 2)
+        # subtree_size = len(result.subtrees)
+        # for i in range(subtree_size):
+        #     assert(result.subtrees[i].relation != NULLKEY and result.subtrees[i].nuclear != NULLKEY)
 
         instance = Instance(total_words, total_tags, edus, gold_actions, result)
         return instance
@@ -254,7 +270,7 @@ class Reader(object):
         def process_syn_feat(string, size):
             data = string.split(' ')
             ret_value = []
-            assert(len(data) == size + 1)
+            # assert(len(data) == size + 13)
             for i in range (1, size+1):
                 ret_value.append(float(data[i]))
             return data[0], ret_value
@@ -296,16 +312,20 @@ class Reader(object):
                     # only for assertion (test)
                     # a minor mistake in BiAffine implicit syntax feature, all digits are changed into 0
                     # The original data still exist in the main set. For the sake of easy test, I remove digits in words.
+                    # word1 = remove_digits(w1.lower())
+                    # word2 = remove_digits(instances[inst_idx].edus[edu_idx].words[cur_word_size])
+                    # if (word1 != word2):
                     word1 = remove_digits(w1.lower())
                     word2 = remove_digits(instances[inst_idx].edus[edu_idx].words[cur_word_size])
                     assert (word1 == word2)
+                    print("e")
                 except:
                     print('Tada!, Investigate why :3 cemungudh..')
-                    import ipdb; ipdb.set_trace()
+                    # import ipdb; ipdb.set_trace()
                 
                 instances[inst_idx].edus[edu_idx].syntax_features.append(syn_feat.concat())
                 cur_word_size += 1
-                if cur_word_size == len(instances[inst_idx].edus[edu_idx].words):
+                if cur_word_size  == len(instances[inst_idx].edus[edu_idx].words):
                     cur_word_size = 0
                     edu_idx += 1
                     if edu_idx == len(instances[inst_idx].edus):
